@@ -1,0 +1,420 @@
+<!-- Simple Chat Widget - Minimal Version -->
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+<style>
+  /* Essential styles only */
+  .chat-widget-container {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    right: 32px;
+    width: 380px;
+    height: 600px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    flex-direction: column;
+    z-index: 99999;
+    overflow: hidden;
+    border: 1px solid #eee;
+  }
+  
+  .chat-widget-button {
+    position: fixed;
+    bottom: 24px;
+    right: 32px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #FFCC33;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 99998;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .chat-widget-button:hover {
+    transform: scale(1.05);
+    background: #E6B800;
+  }
+  
+  .chat-widget-header {
+    background: #FFCC33;
+    color: #333;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .chat-widget-body {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    background: #f9f9f9;
+  }
+  
+  .chat-widget-footer {
+    padding: 12px;
+    border-top: 1px solid #eee;
+    display: flex;
+    gap: 8px;
+  }
+  
+  .chat-widget-input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    outline: none;
+    font-size: 16px;
+  }
+  
+  .chat-widget-send {
+    background: #FFCC33;
+    color: #333;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  
+  .chat-widget-send:hover {
+    background: #E6B800;
+  }
+  
+  .user-message {
+    background: #e6e6e6;
+    color: #333;
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    max-width: 80%;
+    margin-left: auto;
+    word-wrap: break-word;
+  }
+  
+  .bot-message {
+    background: #FFF2CC;
+    color: #333;
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    max-width: 80%;
+    word-wrap: break-word;
+  }
+  
+  .bot-message img {
+    max-width: 100%;
+    border-radius: 8px;
+    margin: 5px 0;
+  }
+  
+  .typing-indicator {
+    display: flex;
+    padding: 8px;
+    margin-bottom: 10px;
+    max-width: 80%;
+  }
+  
+  .typing-indicator span {
+    height: 8px;
+    width: 8px;
+    background: #FFCC33;
+    border-radius: 50%;
+    display: block;
+    margin: 0 2px;
+    animation: pulse 1s infinite;
+  }
+  
+  .typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  
+  .typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+  
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(1); opacity: 0.4; }
+  }
+  
+  @media (max-width: 480px) {
+    .chat-widget-container {
+      width: 90vw;
+      height: 80vh;
+      right: 5vw;
+      bottom: 10vh;
+    }
+    
+    .chat-widget-button {
+      right: 5vw;
+      bottom: 5vh;
+    }
+  }
+</style>
+
+<!-- Chat Button -->
+<div id="n8n-chat-widget-button" class="chat-widget-button">💬</div>
+
+<!-- Chat Container -->
+<div id="n8n-chat-widget-container" class="chat-widget-container" data-webhook-url="https://sparkling.app.n8n.cloud/webhook/87dab046-cf48-4d22-bc4e-f79ebee02935/chat">
+  <div class="chat-widget-header">
+    <div class="font-bold">Chat</div>
+    <div>
+      <button id="n8n-chat-clear" class="mr-2">🗑️</button>
+      <button id="n8n-chat-close">✖</button>
+    </div>
+  </div>
+  <div id="n8n-chat-widget-body" class="chat-widget-body">
+    <!-- Messages will appear here -->
+  </div>
+  <div class="chat-widget-footer">
+    <input id="n8n-chat-widget-input" class="chat-widget-input" type="text" placeholder="Type your message here...">
+    <button id="n8n-chat-widget-send" class="chat-widget-send">Send</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Core elements
+  const chatButton = document.getElementById('n8n-chat-widget-button');
+  const chatContainer = document.getElementById('n8n-chat-widget-container');
+  const chatBody = document.getElementById('n8n-chat-widget-body');
+  const chatInput = document.getElementById('n8n-chat-widget-input');
+  const sendButton = document.getElementById('n8n-chat-widget-send');
+  const closeButton = document.getElementById('n8n-chat-close');
+  const clearButton = document.getElementById('n8n-chat-clear');
+  
+  // Webhook URL from data attribute
+  const webhookUrl = chatContainer.getAttribute('data-webhook-url');
+  
+  // Get or create a unique chat ID
+  function getChatId() {
+    let chatId = localStorage.getItem('n8nChatId');
+    if (!chatId) {
+      chatId = "chat_" + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('n8nChatId', chatId);
+    }
+    return chatId;
+  }
+  
+  // Get saved messages
+  function getMessages() {
+    let messages = localStorage.getItem('n8nChatMessages');
+    return messages ? JSON.parse(messages) : [];
+  }
+  
+  // Save a message
+  function saveMessage(text, isUser) {
+    const messages = getMessages();
+    messages.push({
+      text: text,
+      isUser: isUser,
+      timestamp: new Date().toISOString()
+    });
+    localStorage.setItem('n8nChatMessages', JSON.stringify(messages));
+  }
+  
+  // Clear chat history
+  function clearChat() {
+    localStorage.removeItem('n8nChatMessages');
+    localStorage.removeItem('n8nChatId');
+    chatBody.innerHTML = '';
+    addWelcomeMessage();
+  }
+  
+  // Add welcome message
+  function addWelcomeMessage() {
+    const welcomeMsg = document.createElement('div');
+    welcomeMsg.className = 'bot-message';
+    welcomeMsg.innerHTML = '<strong>Hi 👋, how can we help?</strong>';
+    chatBody.appendChild(welcomeMsg);
+  }
+  
+  // Process message text to handle images and formatting
+  function processMessage(text) {
+    // Handle image URLs
+    const imageRegex = /(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp))/gi;
+    let processed = text.replace(imageRegex, '<img src="$1" alt="Image">');
+    
+    // Handle line breaks
+    processed = processed.replace(/\n/g, '<br>');
+    
+    // Simple bold text handling
+    processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    return processed;
+  }
+  
+  // Load chat history
+  function loadChatHistory() {
+    chatBody.innerHTML = '';
+    const messages = getMessages();
+    
+    if (messages.length === 0) {
+      addWelcomeMessage();
+      return;
+    }
+    
+    messages.forEach(msg => {
+      const msgElem = document.createElement('div');
+      if (msg.isUser) {
+        msgElem.className = 'user-message';
+        msgElem.textContent = msg.text;
+      } else {
+        msgElem.className = 'bot-message';
+        msgElem.innerHTML = processMessage(msg.text);
+      }
+      chatBody.appendChild(msgElem);
+    });
+    
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+  
+  // Show typing indicator
+  function showTypingIndicator() {
+    const indicator = document.createElement('div');
+    indicator.className = 'typing-indicator';
+    indicator.id = 'typing-indicator';
+    indicator.innerHTML = '<span></span><span></span><span></span>';
+    chatBody.appendChild(indicator);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }
+  
+  // Remove typing indicator
+  function removeTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) {
+      indicator.remove();
+    }
+  }
+  
+  // Send a message
+  function sendMessage() {
+    const message = chatInput.value.trim();
+    if (!message) return;
+    
+    // Add user message to chat
+    const userMsg = document.createElement('div');
+    userMsg.className = 'user-message';
+    userMsg.textContent = message;
+    chatBody.appendChild(userMsg);
+    
+    // Save message to localStorage
+    saveMessage(message, true);
+    
+    // Clear input
+    chatInput.value = '';
+    
+    // Scroll to bottom
+    chatBody.scrollTop = chatBody.scrollHeight;
+    
+    // Show typing indicator
+    showTypingIndicator();
+    
+    // Send to webhook
+    fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatId: getChatId(),
+        message: message,
+        route: 'general',
+        language: 'en'
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      // Remove typing indicator
+      removeTypingIndicator();
+      
+      // Add bot response
+      const botMsg = document.createElement('div');
+      botMsg.className = 'bot-message';
+      const botResponse = data.output || "Sorry, I couldn't understand that.";
+      botMsg.innerHTML = processMessage(botResponse);
+      chatBody.appendChild(botMsg);
+      
+      // Save bot message
+      saveMessage(botResponse, false);
+      
+      // Scroll to bottom
+      chatBody.scrollTop = chatBody.scrollHeight;
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      removeTypingIndicator();
+      
+      // Show error message
+      const errorMsg = document.createElement('div');
+      errorMsg.className = 'bot-message';
+      errorMsg.textContent = "Sorry, there was an error. Please try again.";
+      chatBody.appendChild(errorMsg);
+      
+      // Save error message
+      saveMessage("Sorry, there was an error. Please try again.", false);
+      
+      // Scroll to bottom
+      chatBody.scrollTop = chatBody.scrollHeight;
+    });
+  }
+  
+  // Show chat widget
+  function showChat() {
+    chatContainer.style.display = 'flex';
+    chatButton.style.display = 'none';
+    loadChatHistory();
+  }
+  
+  // Hide chat widget
+  function hideChat() {
+    chatContainer.style.display = 'none';
+    chatButton.style.display = 'flex';
+  }
+  
+  // Event Listeners - Using multiple approaches for redundancy
+  
+  // Button to open chat - using both onclick and addEventListener
+  chatButton.onclick = showChat;
+  chatButton.addEventListener('click', showChat);
+  
+  // Close button
+  closeButton.addEventListener('click', hideChat);
+  
+  // Clear button
+  clearButton.addEventListener('click', clearChat);
+  
+  // Send button
+  sendButton.addEventListener('click', sendMessage);
+  
+  // Send on Enter
+  chatInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      sendMessage();
+    }
+  });
+  
+  // Ensure button visibility on load
+  window.addEventListener('load', function() {
+    setTimeout(function() {
+      chatButton.style.display = 'flex';
+    }, 300);
+  });
+  
+  // Initialize on load
+  function initialize() {
+    // Make sure to get or create a chat ID
+    getChatId();
+  }
+  
+  initialize();
+})();
+</script>
