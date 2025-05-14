@@ -1,0 +1,1148 @@
+<!-- n8n Enhanced Chat Widget -->
+<!-- Core libraries - using browser-compatible versions -->
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- Remove problematic libraries -->
+<!-- <script src=	// Initial theme check
+	if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+		// If user hasn't set a preference but system prefers dark
+		if (!localStorage.getItem('n8nChatTheme')) {
+			currentTheme = 'dark';
+		}
+	}	// Process message text for rendering
+	function processMessage(text) {
+		// Use marked library if available to process markdown
+		if (window.marked) {
+			try {
+				// Configure marked to render images correctly
+				marked.setOptions({
+					breaks: true,
+					gfm: true
+				});
+				return marked.parse(text);
+			} catch (e) {
+				console.error("Error parsing markdown:", e);
+				// Fallback if parsing fails
+				return processMessageFallback(text);
+			}
+		} else {
+			return processMessageFallback(text);
+		}
+	}
+	
+	// Fallback message processing for when marked is not available
+	function processMessageFallback(text) {
+		// Convert line breaks
+		text = text.replace(/\n/g, '<br>');
+		
+		// Detect and convert image URLs
+		const imageUrlRegex = /(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp))/gi;
+		text = text.replace(imageUrlRegex, '<img src="$1" alt="Image" class="max-w-full rounded-lg my-1" />');
+		
+		// Simple bold text support
+		text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+		
+		// Simple italics text support
+		text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+		
+		return text;
+	}<!-- Simple emoji panel -->
+<div id="n8n-emoji-panel" class="hidden absolute bottom-16 right-4 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg p-2 z-[100000] grid grid-cols-5 gap-2">
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">😊</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">👍</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">🙏</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">❤️</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">👋</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">🔥</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">✅</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">⭐</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">🎉</button>
+	<button class="emoji-btn hover:bg-gray-100 dark:hover:bg-gray-600 p-2 rounded">🤔</button>
+</div>
+
+<!-- Debugging indicator to ensure widget is visible -->
+<div id="n8n-chat-debug-indicator" class="hidden fixed top-5 right-5 bg-red-500 text-white px-3 py-1 rounded-md z-[100000]">
+  Chat widget is open but may be hidden
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+	// Simple direct script for fixing the button click issue
+	const chatButton = document.getElementById('n8n-chat-widget-button');
+	const chatContainer = document.getElementById('n8n-chat-widget-container');
+	const debugIndicator = document.getElementById('n8n-chat-debug-indicator');
+	
+	// Elements for direct control
+	const langToggle = document.getElementById('n8n-language-toggle');
+	const themeToggle = document.getElementById('n8n-theme-toggle');
+	const sizeToggle = document.getElementById('n8n-size-toggle');
+	const clearChat = document.getElementById('n8n-clear-chat');
+	const sendButton = document.getElementById('n8n-chat-widget-send');
+	const inputField = document.getElementById('n8n-chat-widget-input');
+	const emojiButton = document.getElementById('n8n-emoji-button');
+	const chatBody = document.getElementById('n8n-chat-widget-body');
+	
+	// Current language and theme state
+	let currentLanguage = localStorage.getItem('n8nChatLanguage') || 'en';
+	let currentTheme = localStorage.getItem('n8nChatTheme') || 'light';
+	let isExpanded = false;
+	
+	// Initial theme check
+	if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+		// If user hasn't set a preference but system prefers dark
+		if (!localStorage.getItem('n8nChatTheme')) {
+			currentTheme = 'dark';
+		}
+	}
+	
+	// Language texts
+	const langTexts = {
+		en: {
+			title: 'Chat',
+			placeholder: 'Type your message here...',
+			send: 'Send',
+			welcome: 'Hi 👋, how can we help?',
+			toggle: 'عربي'
+		},
+		ar: {
+			title: 'محادثة',
+			placeholder: 'اكتب رسالتك هنا...',
+			send: 'إرسال',
+			welcome: 'مرحباً 👋، كيف يمكننا مساعدتك؟',
+			toggle: 'English'
+		}
+	};
+	
+	// Apply current language
+	function applyLanguage(lang) {
+		document.getElementById('n8n-chat-title').textContent = langTexts[lang].title;
+		document.getElementById('n8n-language-toggle').textContent = langTexts[lang].toggle;
+		document.getElementById('n8n-chat-widget-input').placeholder = langTexts[lang].placeholder;
+		document.getElementById('n8n-chat-widget-send').textContent = langTexts[lang].send;
+		
+		// Set RTL if Arabic
+		if (lang === 'ar') {
+			document.body.classList.add('rtl-mode');
+			chatContainer.dir = 'rtl';
+		} else {
+			document.body.classList.remove('rtl-mode');
+			chatContainer.dir = 'ltr';
+		}
+		
+		localStorage.setItem('n8nChatLanguage', lang);
+		currentLanguage = lang;
+	}
+	
+	// Apply current theme
+	function applyTheme(theme) {
+		console.log("Applying theme:", theme);
+		if (theme === 'dark') {
+			document.documentElement.classList.add('dark');
+		} else {
+			document.documentElement.classList.remove('dark');
+		}
+		localStorage.setItem('n8nChatTheme', theme);
+		currentTheme = theme;
+	}
+	
+	// Toggle size
+	function toggleSize() {
+		isExpanded = !isExpanded;
+		if (isExpanded) {
+			chatContainer.classList.add('expanded');
+			sizeToggle.textContent = '⊟';
+		} else {
+			chatContainer.classList.remove('expanded');
+			sizeToggle.textContent = '⊞';
+		}
+		console.log("Size toggled, expanded:", isExpanded);
+	}
+	
+	// Clear chat
+	function clearChatHistory() {
+		chatBody.innerHTML = '';
+		localStorage.removeItem('n8nChatMessages');
+		// Also clear the chat ID to start fresh
+		localStorage.removeItem('n8nChatId');
+		console.log("Chat history and ID cleared");
+		addWelcomeMessage();
+	}
+	
+	// Add welcome message
+	function addWelcomeMessage() {
+		const welcomeMsg = document.createElement("p");
+		welcomeMsg.innerHTML = '<strong>' + langTexts[currentLanguage].welcome + '</strong>';
+		welcomeMsg.className = "bot-message mb-4 p-4 rounded-xl bg-yellow-100 dark:bg-yellow-900 dark:text-white text-gray-800 max-w-[80%] animate-fade-in";
+		chatBody.appendChild(welcomeMsg);
+	}
+	
+	// Load chat history
+	function loadChatHistory() {
+		chatBody.innerHTML = '';
+		const savedMessages = localStorage.getItem('n8nChatMessages');
+		const messages = savedMessages ? JSON.parse(savedMessages) : [];
+		
+		if (messages.length === 0) {
+			addWelcomeMessage();
+			return;
+		}
+		
+		messages.forEach(msg => {
+			const msgElem = document.createElement("p");
+			if (msg.isUser) {
+				msgElem.textContent = msg.text;
+				msgElem.className = "user-message mb-4 p-4 rounded-xl bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 max-w-[80%] ml-auto";
+			} else {
+				// Use the markdown processor for bot messages
+				msgElem.innerHTML = processMessage(msg.text);
+				msgElem.className = "bot-message mb-4 p-4 rounded-xl bg-yellow-100 dark:bg-yellow-900 dark:text-white text-gray-800 max-w-[80%]";
+			}
+			chatBody.appendChild(msgElem);
+		});
+		
+		// Scroll to bottom
+		chatBody.scrollTop = chatBody.scrollHeight;
+	}
+	
+	// Show typing indicator
+	function showTypingIndicator() {
+		const typingDiv = document.createElement('div');
+		typingDiv.className = 'typing-indicator flex p-3 max-w-[80%] mb-4';
+		typingDiv.id = 'typing-indicator';
+		typingDiv.innerHTML = '<span class="bg-yellow-400 dark:bg-yellow-500"></span><span class="bg-yellow-400 dark:bg-yellow-500"></span><span class="bg-yellow-400 dark:bg-yellow-500"></span>';
+		chatBody.appendChild(typingDiv);
+		chatBody.scrollTop = chatBody.scrollHeight;
+	}
+	
+	// Remove typing indicator
+	function removeTypingIndicator() {
+		const indicator = document.getElementById('typing-indicator');
+		if (indicator) {
+			indicator.remove();
+		}
+	}
+	
+	// Send message
+	async function sendMessage() {
+		const message = inputField.value.trim();
+		if (message === "") return;
+		
+		// Add user message to chat
+		const userMsgElem = document.createElement("p");
+		userMsgElem.textContent = message;
+		userMsgElem.className = "user-message mb-4 p-4 rounded-xl bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 max-w-[80%] ml-auto animate-fade-in";
+		chatBody.appendChild(userMsgElem);
+		chatBody.scrollTop = chatBody.scrollHeight;
+		
+		// Save message to history
+		let messages = [];
+		const savedMessages = localStorage.getItem('n8nChatMessages');
+		if (savedMessages) {
+			messages = JSON.parse(savedMessages);
+		}
+		
+		messages.push({
+			text: message,
+			isUser: true,
+			timestamp: new Date().toISOString()
+		});
+		
+		localStorage.setItem('n8nChatMessages', JSON.stringify(messages));
+		
+		// Clear input
+		inputField.value = "";
+		
+		// Show typing indicator
+		showTypingIndicator();
+		
+		// Send to n8n webhook
+		try {
+			const chatId = localStorage.getItem('n8nChatId') || ('chat_' + Math.random().toString(36).substr(2, 9));
+			const webhookUrl = chatContainer.getAttribute('data-webhook-url');
+			
+			// Save chat ID if it's new
+			if (!localStorage.getItem('n8nChatId')) {
+				localStorage.setItem('n8nChatId', chatId);
+			}
+			
+			const response = await fetch(webhookUrl, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					chatId: chatId,
+					message: message,
+					route: 'general',
+					language: currentLanguage
+				})
+			});
+			
+			const data = await response.json();
+			
+			// Remove typing indicator
+			removeTypingIndicator();
+			
+			// Add bot response with processed formatting
+			const botMessage = document.createElement("p");
+			const botResponse = data.output || "Sorry, I couldn't understand that.";
+			
+			// Process the message with markdown and image support
+			const processedHTML = processMessage(botResponse);
+			console.log("Processed bot message with markdown");
+			
+			// Sanitize HTML content before setting
+			botMessage.innerHTML = processedHTML;
+			botMessage.className = "bot-message mb-4 p-4 rounded-xl bg-yellow-100 dark:bg-yellow-900 dark:text-white text-gray-800 max-w-[80%] animate-fade-in";
+			chatBody.appendChild(botMessage);
+			chatBody.scrollTop = chatBody.scrollHeight;
+			
+			// Save bot message
+			messages.push({
+				text: botResponse,
+				isUser: false,
+				timestamp: new Date().toISOString()
+			});
+			
+			localStorage.setItem('n8nChatMessages', JSON.stringify(messages));
+			
+		} catch (error) {
+			console.error("Error:", error);
+			removeTypingIndicator();
+			
+			// Show error message
+			const errorMsg = document.createElement("p");
+			errorMsg.textContent = "Sorry, there was an error. Please try again.";
+			errorMsg.className = "bot-message mb-4 p-4 rounded-xl bg-yellow-100 dark:bg-yellow-900 dark:text-white text-gray-800 max-w-[80%] animate-fade-in";
+			chatBody.appendChild(errorMsg);
+			chatBody.scrollTop = chatBody.scrollHeight;
+		}
+	}
+	
+	// Initialize
+	if (chatButton && chatContainer) {
+		// Apply current language and theme
+		applyLanguage(currentLanguage);
+		applyTheme(currentTheme);
+		
+		// Load chat history on init
+		loadChatHistory();
+		
+		// Button click handlers
+		chatButton.addEventListener('click', function() {
+			// Force visibility with multiple approaches
+			chatContainer.classList.remove('hidden');
+			chatContainer.classList.add('force-visible');
+			chatContainer.style.display = 'flex';
+			chatContainer.style.visibility = 'visible';
+			chatContainer.style.opacity = '1';
+			chatContainer.style.zIndex = '99999';
+			
+			// Show debug indicator
+			debugIndicator.classList.remove('hidden');
+			setTimeout(() => {
+				debugIndicator.classList.add('hidden');
+			}, 3000);
+			
+			// Hide the button
+			chatButton.style.display = 'none';
+			
+			console.log("Chat button clicked, container displayed");
+			
+			// Load chat history
+			loadChatHistory();
+		});
+		
+		document.getElementById('n8n-chat-close').addEventListener('click', function() {
+			chatContainer.style.display = 'none';
+			chatContainer.classList.remove('force-visible');
+			chatButton.style.display = 'flex';
+			debugIndicator.classList.add('hidden');
+		});
+		
+		// Language toggle
+		langToggle.addEventListener('click', function() {
+			const newLang = currentLanguage === 'en' ? 'ar' : 'en';
+			applyLanguage(newLang);
+		});
+		
+		// Theme toggle
+		themeToggle.addEventListener('click', function() {
+			const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+			console.log("Toggling theme from", currentTheme, "to", newTheme);
+			applyTheme(newTheme);
+		});
+		
+		// Size toggle
+		sizeToggle.addEventListener('click', toggleSize);
+		
+		// Clear chat
+		clearChat.addEventListener('click', clearChatHistory);
+		
+		// Send button and enter key
+		sendButton.addEventListener('click', sendMessage);
+		inputField.addEventListener('keypress', function(e) {
+			if (e.key === 'Enter') {
+				sendMessage();
+			}
+		});
+		
+		// Emoji picker
+		const emojiPanel = document.getElementById('n8n-emoji-panel');
+		
+		emojiButton.addEventListener('click', function() {
+			emojiPanel.classList.toggle('hidden');
+		});
+		
+		// Add click handlers for each emoji button
+		document.querySelectorAll('.emoji-btn').forEach(btn => {
+			btn.addEventListener('click', function() {
+				inputField.value += this.textContent;
+				inputField.focus();
+				emojiPanel.classList.add('hidden');
+			});
+		});
+		
+		// Hide emoji panel when clicking elsewhere
+		document.addEventListener('click', function(e) {
+			if (!emojiButton.contains(e.target) && !emojiPanel.contains(e.target)) {
+				emojiPanel.classList.add('hidden');
+			}
+		});
+	}
+});
+</script><!-- Add these styles to ensure our chat is above everything else -->
+<style>
+  /* Critical styles to ensure visibility and proper sizing */
+  #n8n-chat-widget-container.force-visible {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 9999999 !important;
+    transform: none !important;
+    position: fixed !important;
+  }
+  
+		// Add styles for message content
+		#n8n-chat-widget-body .bot-message img {
+			max-width: 100%;
+			border-radius: 8px;
+			margin: 8px 0;
+		}
+		
+		#n8n-chat-widget-body .bot-message a {
+			color: #b45309;
+			text-decoration: underline;
+		}
+		
+		#n8n-chat-widget-body .bot-message code {
+			background-color: rgba(0,0,0,0.1);
+			padding: 2px 4px;
+			border-radius: 4px;
+			font-family: monospace;
+		}
+		
+		#n8n-chat-widget-body .bot-message pre {
+			background-color: rgba(0,0,0,0.1);
+			padding: 8px;
+			border-radius: 8px;
+			overflow-x: auto;
+			margin: 8px 0;
+		}
+		
+		.dark #n8n-chat-widget-body .bot-message a {
+			color: #fcd34d;
+		}
+		
+		.dark #n8n-chat-widget-body .bot-message code,
+		.dark #n8n-chat-widget-body .bot-message pre {
+			background-color: rgba(255,255,255,0.1);
+		}
+</style>
+
+<!-- n8n Enhanced Chat Widget -->
+<!-- Core libraries -->
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@4.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@joeattardi/emoji-button@4.6.4/dist/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@2.3.4/dist/purify.min.js"></script>
+
+<!-- Custom styling (minimal, using Tailwind where possible) -->
+<style>
+  .typing-indicator span {
+    height: 8px;
+    width: 8px;
+    border-radius: 50%;
+    display: block;
+    margin: 0 2px;
+    animation: pulse 1s infinite ease-in-out;
+  }
+  
+#n8n-chat-widget-body .user-message {
+    margin-bottom: 16px;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 16px;
+    max-width: 80%;
+    line-height: 1.5;
+  }
+  
+  #n8n-chat-widget-body .bot-message {
+    margin-bottom: 16px;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 16px;
+    max-width: 80%;
+    line-height: 1.5;
+  }
+  
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(1); opacity: 0.4; }
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in;
+  }
+  
+  .animate-fade-out {
+    animation: fadeOut 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @media (max-width: 640px) {
+	#n8n-chat-widget-container {
+		width: 90vw !important;
+		max-width: 380px !important;
+		height: 80vh !important;
+		max-height: 600px !important;
+		right: 5vw !important;
+		bottom: 15vh !important;
+	}
+	
+	#n8n-chat-widget-button {
+		right: 5vw !important;
+		bottom: 10vh !important;
+	}
+}
+  
+#n8n-chat-widget-body {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    font-size: 16px;
+  }
+  
+  #n8n-chat-widget-input {
+    font-size: 16px;
+    padding: 12px;
+  }
+</style>
+
+<!-- Chat Widget Button -->
+<button id="n8n-chat-widget-button" class="fixed bottom-24 right-8 w-20 h-20 rounded-full bg-yellow-400 text-gray-800 shadow-xl flex items-center justify-center text-3xl z-[99998] hover:bg-yellow-500 transition-transform transform hover:scale-105 animate-fade-in cursor-pointer">
+  💬
+</button>
+
+<!-- Chat Widget Container -->
+<div id="n8n-chat-widget-container" class="hidden fixed bottom-24 right-8 w-[380px] h-[600px] md:w-[420px] md:h-[650px] bg-white dark:bg-gray-800 rounded-xl shadow-2xl flex flex-col z-[99999] overflow-hidden transition-all duration-300 border border-gray-200 dark:border-gray-700" data-webhook-url="https://sparkling.app.n8n.cloud/webhook/87dab046-cf48-4d22-bc4e-f79ebee02935/chat">
+  <!-- Header -->
+  <div id="n8n-chat-widget-header" class="bg-yellow-400 dark:bg-yellow-500 text-gray-800 dark:text-gray-900 p-4 flex justify-between items-center">
+    <div class="flex items-center space-x-3">
+      <button id="n8n-language-toggle" class="text-sm px-2 py-1 border border-gray-700 rounded hover:bg-yellow-300 dark:hover:bg-yellow-600">عربي</button>
+      <span id="n8n-chat-title" class="font-bold text-lg">Chat</span>
+    </div>
+    <div class="flex items-center space-x-3">
+      <button id="n8n-theme-toggle" class="text-xl hover:text-gray-600 dark:hover:text-gray-300">🌓</button>
+      <button id="n8n-clear-chat" class="text-xl hover:text-gray-600 dark:hover:text-gray-300">🗑️</button>
+      <button id="n8n-size-toggle" class="text-xl hover:text-gray-600 dark:hover:text-gray-300">⊞</button>
+      <button id="n8n-chat-close" class="text-xl hover:text-gray-600 dark:hover:text-gray-300">✖</button>
+    </div>
+  </div>
+  
+  <!-- Body -->
+  <div id="n8n-chat-widget-body" class="flex-1 p-4 overflow-y-auto hide-scrollbar bg-gray-50 dark:bg-gray-800">
+    <!-- Messages will be added here -->
+  </div>
+  
+  <!-- Footer -->
+  <div id="n8n-chat-widget-footer" class="p-4 border-t border-gray-200 dark:border-gray-700 flex space-x-3 bg-white dark:bg-gray-800">
+    <div class="relative flex-1">
+      <input type="text" id="n8n-chat-widget-input" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 dark:bg-gray-700 dark:text-white" placeholder="Type your message here...">
+      <button id="n8n-emoji-button" class="absolute right-3 top-3 text-xl text-gray-500 dark:text-gray-400 hover:text-yellow-500">😊</button>
+    </div>
+    <button id="n8n-chat-widget-send" class="px-5 py-3 bg-yellow-400 dark:bg-yellow-500 text-gray-800 dark:text-gray-900 rounded-lg hover:bg-yellow-500 dark:hover:bg-yellow-600 transition-colors font-medium">Send</button>
+  </div>
+  
+  <!-- User data collection modal (initially hidden) -->
+  <div id="n8n-user-data-modal" class="hidden absolute inset-0 bg-white dark:bg-gray-800 flex flex-col p-6 z-50 animate-fade-in">
+    <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">Before you go...</h3>
+    <p class="mb-5 text-gray-600 dark:text-gray-300 text-lg">Please share a bit about yourself to help us improve.</p>
+    <form id="n8n-user-data-form" class="space-y-4">
+      <div>
+        <label class="block text-md font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+        <input type="text" id="n8n-user-name" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-lg">
+      </div>
+      <div>
+        <label class="block text-md font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+        <input type="email" id="n8n-user-email" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-lg">
+      </div>
+      <div>
+        <label class="block text-md font-medium text-gray-700 dark:text-gray-300 mb-1">How can we improve?</label>
+        <textarea id="n8n-user-feedback" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-lg" rows="3"></textarea>
+      </div>
+      <div class="flex justify-end space-x-3 mt-4">
+        <button type="button" id="n8n-user-data-skip" class="px-4 py-3 text-gray-600 dark:text-gray-300 text-lg">Skip</button>
+        <button type="submit" class="px-5 py-3 bg-yellow-400 dark:bg-yellow-500 text-gray-800 dark:text-gray-900 rounded-lg text-lg">Submit</button>
+      </div>
+    </form>
+  </div>
+  
+  <!-- Rate limit notice (initially hidden) -->
+  <div id="n8n-rate-limit-notice" class="hidden absolute inset-0 bg-white dark:bg-gray-800 flex flex-col items-center justify-center p-6 z-50 animate-fade-in">
+    <div class="text-yellow-500 text-6xl mb-5">⏱️</div>
+    <h3 class="text-xl font-bold mb-3 text-gray-800 dark:text-white" id="n8n-rate-limit-title">Please wait</h3>
+    <p class="text-center text-gray-600 dark:text-gray-300 text-lg" id="n8n-rate-limit-message">You can send another message in 10 seconds.</p>
+  </div>
+</div>
+
+<script>
+(function() {
+	// Configuration
+	const chatConfig = {
+		webhook: {
+			// The actual URL is stored as a data attribute on the container for security
+			route: 'general'
+		},
+		language: {
+			current: 'en',
+			en: {
+				title: 'Chat',
+				placeholder: 'Type your message here...',
+				send: 'Send',
+				welcome: 'Hi 👋, how can we help?',
+				toggle: 'عربي',
+				expand: '⊞',
+				collapse: '⊟',
+				clear: '🗑️',
+				pleaseWait: 'Please wait',
+				cooldownMessage: 'You can send another message in {seconds} seconds.',
+				dailyLimitTitle: 'Daily limit reached',
+				dailyLimitMessage: 'You\'ve reached the maximum of 10 conversations today. Please try again tomorrow.',
+				userDataTitle: 'Before you go...',
+				userDataMessage: 'Please share a bit about yourself to help us improve.',
+				skip: 'Skip',
+				submit: 'Submit'
+			},
+			ar: {
+				title: 'محادثة',
+				placeholder: 'اكتب رسالتك هنا...',
+				send: 'إرسال',
+				welcome: 'مرحباً 👋، كيف يمكننا مساعدتك؟',
+				toggle: 'English',
+				expand: '⊞',
+				collapse: '⊟',
+				clear: '🗑️',
+				pleaseWait: 'الرجاء الانتظار',
+				cooldownMessage: 'يمكنك إرسال رسالة أخرى في {seconds} ثوانٍ.',
+				dailyLimitTitle: 'تم الوصول إلى الحد اليومي',
+				dailyLimitMessage: 'لقد وصلت إلى الحد الأقصى وهو 10 محادثات اليوم. يرجى المحاولة مرة أخرى غدًا.',
+				userDataTitle: 'قبل أن تذهب...',
+				userDataMessage: 'يرجى مشاركة القليل عن نفسك لمساعدتنا على التحسين.',
+				skip: 'تخطي',
+				submit: 'إرسال'
+			}
+		},
+		// Rate limiting configuration
+		rateLimit: {
+			messageInterval: 10, // seconds between messages
+			dailyLimit: 10 // conversations per day
+		},
+		// Inactivity timeout in milliseconds
+		inactivityTimeout: 60000
+	};
+
+  // Setup LocalForage stores
+  const store = {
+    chat: localforage.createInstance({ name: 'n8nChat', storeName: 'messages' }),
+    settings: localforage.createInstance({ name: 'n8nChat', storeName: 'settings' }),
+    usage: localforage.createInstance({ name: 'n8nChat', storeName: 'usage' })
+  };
+
+  // Elements
+  const elements = {
+    chatButton: document.getElementById('n8n-chat-widget-button'),
+    chatContainer: document.getElementById('n8n-chat-widget-container'),
+    closeButton: document.getElementById('n8n-chat-close'),
+    sendButton: document.getElementById('n8n-chat-widget-send'),
+    inputField: document.getElementById('n8n-chat-widget-input'),
+    chatBody: document.getElementById('n8n-chat-widget-body'),
+    langToggle: document.getElementById('n8n-language-toggle'),
+    themeToggle: document.getElementById('n8n-theme-toggle'),
+    sizeToggle: document.getElementById('n8n-size-toggle'),
+    clearChat: document.getElementById('n8n-clear-chat'),
+    chatTitle: document.getElementById('n8n-chat-title'),
+    emojiButton: document.getElementById('n8n-emoji-button'),
+    userDataModal: document.getElementById('n8n-user-data-modal'),
+    userDataForm: document.getElementById('n8n-user-data-form'),
+    userDataSkip: document.getElementById('n8n-user-data-skip'),
+    rateLimitNotice: document.getElementById('n8n-rate-limit-notice'),
+    rateLimitTitle: document.getElementById('n8n-rate-limit-title'),
+    rateLimitMessage: document.getElementById('n8n-rate-limit-message')
+  };
+
+  // Chat state variables
+  let isInCooldown = false;
+  let inactivityTimer = null;
+  let lastMessageTime = null;
+  
+  // Initialize emoji picker
+  const picker = new EmojiButton({
+    theme: 'auto',
+    autoHide: true,
+    position: 'top-end'
+  });
+  
+	// Setup emoji picker
+	picker.on('emoji', emoji => {
+		elements.inputField.value += emoji;
+		elements.inputField.focus();
+	});
+	
+	elements.emojiButton.addEventListener('click', () => {
+		picker.togglePicker(elements.emojiButton);
+	});
+  
+  // Theme handling
+  async function initializeTheme() {
+    const savedTheme = await store.settings.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+  }
+  
+  function applyTheme(theme) {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    store.settings.setItem('theme', theme);
+  }
+  
+  elements.themeToggle.addEventListener('click', async () => {
+    const currentTheme = await store.settings.getItem('theme') || 'light';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    applyTheme(newTheme);
+  });
+
+  // Initialize language
+  async function initializeLanguage() {
+    const savedLanguage = await store.settings.getItem('language') || 'en';
+    chatConfig.language.current = savedLanguage;
+    
+    if (savedLanguage === 'ar') {
+      document.body.classList.add('rtl-mode');
+      elements.chatContainer.dir = 'rtl';
+    } else {
+      document.body.classList.remove('rtl-mode');
+      elements.chatContainer.dir = 'ltr';
+    }
+    
+    updateLanguageTexts();
+  }
+
+  // Function to securely generate or retrieve a unique chat ID
+  async function getChatId() {
+    let chatId = await store.settings.getItem('chatId');
+    if (!chatId) {
+      chatId = "chat_" + Math.random().toString(36).substr(2, 9) + "_" + Date.now();
+      await store.settings.setItem('chatId', chatId);
+    }
+    return chatId;
+  }
+
+  // Save message to LocalForage
+  async function saveMessage(message, isUser) {
+    const messages = await getMessages();
+    messages.push({
+      text: message,
+      isUser: isUser,
+      timestamp: new Date().toISOString()
+    });
+    await store.chat.setItem('messages', messages);
+    
+    // Track message for rate limiting
+    if (isUser) {
+      lastMessageTime = Date.now();
+      await trackMessageUsage();
+    }
+  }
+
+  // Track message usage for rate limiting
+  async function trackMessageUsage() {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const usage = await store.usage.getItem(today) || { count: 0, timestamps: [] };
+    
+    usage.count += 1;
+    usage.timestamps.push(Date.now());
+    
+    await store.usage.setItem(today, usage);
+  }
+
+  // Check if daily limit is reached
+  async function isDailyLimitReached() {
+    const today = new Date().toISOString().split('T')[0];
+    const usage = await store.usage.getItem(today) || { count: 0 };
+    return usage.count >= chatConfig.rateLimit.dailyLimit;
+  }
+
+  // Show rate limit notice
+  function showRateLimitNotice(seconds, isDaily = false) {
+    const lang = chatConfig.language[chatConfig.language.current];
+    
+    elements.rateLimitTitle.textContent = isDaily ? lang.dailyLimitTitle : lang.pleaseWait;
+    elements.rateLimitMessage.textContent = isDaily 
+      ? lang.dailyLimitMessage 
+      : lang.cooldownMessage.replace('{seconds}', seconds);
+    
+    elements.rateLimitNotice.classList.remove('hidden');
+    
+    if (!isDaily) {
+      setTimeout(() => {
+        elements.rateLimitNotice.classList.add('hidden');
+        isInCooldown = false;
+      }, seconds * 1000);
+    }
+  }
+
+  // Get messages from LocalForage
+  async function getMessages() {
+    const messages = await store.chat.getItem('messages');
+    return messages || [];
+  }
+
+  // Clear chat history
+  async function clearChatHistory() {
+    await store.chat.removeItem('messages');
+    elements.chatBody.innerHTML = '';
+    addWelcomeMessage();
+  }
+
+  // Add welcome message
+  function addWelcomeMessage() {
+    const welcomeMsg = document.createElement("p");
+    welcomeMsg.innerHTML = DOMPurify.sanitize('<strong>' + chatConfig.language[chatConfig.language.current].welcome + '</strong>');
+    welcomeMsg.className = "bot-message mb-4 p-4 rounded-xl bg-yellow-100 dark:bg-yellow-900 dark:text-white text-gray-800 max-w-[80%] animate-fade-in";
+    elements.chatBody.appendChild(welcomeMsg);
+  }
+
+  // Load chat history
+  async function loadChatHistory() {
+    elements.chatBody.innerHTML = '';
+    const messages = await getMessages();
+    
+    if (messages.length === 0) {
+      addWelcomeMessage();
+      return;
+    }
+    
+    messages.forEach(msg => {
+      const msgElem = document.createElement("p");
+      if (msg.isUser) {
+        msgElem.textContent = msg.text;
+        msgElem.className = "user-message mb-4 p-4 rounded-xl bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 max-w-[80%] ml-auto";
+      } else {
+        msgElem.innerHTML = DOMPurify.sanitize(processMessage(msg.text));
+        msgElem.className = "bot-message mb-4 p-4 rounded-xl bg-yellow-100 dark:bg-yellow-900 dark:text-white text-gray-800 max-w-[80%]";
+      }
+      elements.chatBody.appendChild(msgElem);
+    });
+    
+    // Scroll to bottom
+    elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+  }
+
+  // Show typing indicator
+  function showTypingIndicator() {
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'typing-indicator flex p-3 max-w-[80%] mb-4';
+    typingDiv.id = 'typing-indicator';
+    typingDiv.innerHTML = '<span class="bg-yellow-400 dark:bg-yellow-500"></span><span class="bg-yellow-400 dark:bg-yellow-500"></span><span class="bg-yellow-400 dark:bg-yellow-500"></span>';
+    elements.chatBody.appendChild(typingDiv);
+    elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+  }
+
+  // Remove typing indicator
+  function removeTypingIndicator() {
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) {
+      indicator.remove();
+    }
+  }
+
+  // Toggle language
+  async function toggleLanguage() {
+    if (chatConfig.language.current === 'en') {
+      chatConfig.language.current = 'ar';
+      document.body.classList.add('rtl-mode');
+      elements.chatContainer.dir = 'rtl';
+    } else {
+      chatConfig.language.current = 'en';
+      document.body.classList.remove('rtl-mode');
+      elements.chatContainer.dir = 'ltr';
+    }
+    
+    // Save language preference
+    await store.settings.setItem('language', chatConfig.language.current);
+    updateLanguageTexts();
+  }
+
+	// Toggle chat size
+	function toggleSize() {
+		elements.chatContainer.classList.toggle('max-w-[800px]');
+		elements.chatContainer.classList.toggle('max-h-[800px]');
+		elements.chatContainer.classList.toggle('md:w-[700px]');
+		elements.chatContainer.classList.toggle('md:h-[750px]');
+		
+		const isExpanded = elements.chatContainer.classList.contains('max-w-[800px]');
+		elements.sizeToggle.textContent = isExpanded 
+			? chatConfig.language[chatConfig.language.current].collapse 
+			: chatConfig.language[chatConfig.language.current].expand;
+	}
+
+  // Update all text elements based on current language
+  function updateLanguageTexts() {
+    const lang = chatConfig.language[chatConfig.language.current];
+    elements.chatTitle.textContent = lang.title;
+    elements.inputField.placeholder = lang.placeholder;
+    elements.sendButton.textContent = lang.send;
+    elements.langToggle.textContent = lang.toggle;
+    
+    const isExpanded = elements.chatContainer.classList.contains('sm:w-[700px]');
+    elements.sizeToggle.textContent = isExpanded ? lang.collapse : lang.expand;
+  }
+
+  // Process text to handle markdown and images
+  function processMessage(text) {
+    // First convert markdown to HTML using marked library if available
+    let processedText = window.marked ? marked.parse(text) : text;
+    
+    // Then detect any image URLs and convert them to img tags if not already done
+    if (!window.marked) {
+      // Simple regex to find image URLs
+      const imageUrlRegex = /(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp))/gi;
+      processedText = processedText.replace(imageUrlRegex, '<img src="$1" alt="Image" class="max-w-full rounded-lg my-1" />');
+    }
+    
+    return processedText;
+  }
+  
+  // Start the inactivity timer
+  function startInactivityTimer() {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      showUserDataCollection();
+    }, chatConfig.inactivityTimeout);
+  }
+  
+  // Reset the inactivity timer
+  function resetInactivityTimer() {
+    clearTimeout(inactivityTimer);
+    startInactivityTimer();
+  }
+  
+  // Show user data collection form
+  function showUserDataCollection() {
+    elements.userDataModal.classList.remove('hidden');
+  }
+  
+  // Handle user data submission
+  async function handleUserDataSubmission(event) {
+    event.preventDefault();
+    
+    const userData = {
+      name: document.getElementById('n8n-user-name').value.trim(),
+      email: document.getElementById('n8n-user-email').value.trim(),
+      feedback: document.getElementById('n8n-user-feedback').value.trim(),
+      chatId: await getChatId(),
+      timestamp: new Date().toISOString()
+    };
+    
+    // Send user data to n8n webhook
+    try {
+      const webhookUrl = elements.chatContainer.getAttribute('data-webhook-url');
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: 'userData',
+          data: userData,
+          route: chatConfig.webhook.route
+        })
+      });
+    } catch (error) {
+      console.error('Error sending user data:', error);
+    }
+    
+    // Hide the modal
+    elements.userDataModal.classList.add('hidden');
+  }
+
+  // Send message
+  async function sendMessage() {
+    const message = elements.inputField.value.trim();
+    if (message === "") return;
+    
+    // Check rate limits
+    if (isInCooldown) {
+      return; // Still in cooldown
+    }
+    
+    // Check daily limit
+    if (await isDailyLimitReached()) {
+      showRateLimitNotice(0, true);
+      return;
+    }
+    
+    // Check message cooldown
+    if (lastMessageTime && (Date.now() - lastMessageTime) < (chatConfig.rateLimit.messageInterval * 1000)) {
+      const remainingSeconds = Math.ceil(chatConfig.rateLimit.messageInterval - ((Date.now() - lastMessageTime) / 1000));
+      isInCooldown = true;
+      showRateLimitNotice(remainingSeconds);
+      return;
+    }
+
+    // Add user message to chat
+    const userMsgElem = document.createElement("p");
+    userMsgElem.textContent = message;
+    userMsgElem.className = "user-message mb-4 p-4 rounded-xl bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 max-w-[80%] ml-auto animate-fade-in";
+    elements.chatBody.appendChild(userMsgElem);
+    elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+    
+    // Save user message
+    await saveMessage(message, true);
+
+    // Clear input
+    elements.inputField.value = "";
+    
+    // Show typing indicator
+    showTypingIndicator();
+    
+    // Reset inactivity timer when sending message
+    resetInactivityTimer();
+
+    // Send to n8n webhook
+    try {
+      const webhookUrl = elements.chatContainer.getAttribute('data-webhook-url');
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatId: await getChatId(),
+          message: message,
+          route: chatConfig.webhook.route,
+          language: chatConfig.language.current
+        })
+      });
+      
+      const data = await response.json();
+      
+      // Remove typing indicator
+      removeTypingIndicator();
+      
+      // Add bot response with processed formatting
+      const botMessage = document.createElement("p");
+      const botResponse = data.output || "Sorry, I couldn't understand that.";
+      botMessage.innerHTML = DOMPurify.sanitize(processMessage(botResponse));
+      botMessage.className = "bot-message mb-4 p-4 rounded-xl bg-yellow-100 dark:bg-yellow-900 dark:text-white text-gray-800 max-w-[80%] animate-fade-in";
+      elements.chatBody.appendChild(botMessage);
+      elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+      
+      // Save bot message
+      await saveMessage(botResponse, false);
+    } catch (error) {
+      console.error("Error:", error);
+      removeTypingIndicator();
+      
+      // Show error message
+      const errorMsg = document.createElement("p");
+      errorMsg.textContent = "Sorry, there was an error. Please try again.";
+      errorMsg.className = "bot-message mb-4 p-4 rounded-xl bg-yellow-100 dark:bg-yellow-900 dark:text-white text-gray-800 max-w-[80%] animate-fade-in";
+      elements.chatBody.appendChild(errorMsg);
+      elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+      
+      // Save error message
+      await saveMessage("Sorry, there was an error. Please try again.", false);
+    }
+  }
+
+	// Initialize everything
+	async function initialize() {
+		await initializeTheme();
+		await initializeLanguage();
+		await getChatId(); // Ensure chat ID is created
+		
+		// Start inactivity timer
+		startInactivityTimer();
+		
+		// Event Listeners
+		elements.chatButton.addEventListener("click", function() {
+			console.log("Chat button clicked"); // Debug line
+			elements.chatContainer.classList.remove('hidden');
+			elements.chatContainer.classList.add('animate-fade-in');
+			elements.chatButton.classList.add('hidden');
+			
+			// Load chat history when opening
+			loadChatHistory();
+			
+			// Reset inactivity timer
+			resetInactivityTimer();
+		});
+
+		elements.closeButton.addEventListener("click", function() {
+			elements.chatContainer.classList.add('animate-fade-out');
+			setTimeout(() => {
+				elements.chatContainer.classList.add('hidden');
+				elements.chatContainer.classList.remove('animate-fade-out', 'animate-fade-in');
+				elements.chatButton.classList.remove('hidden');
+			}, 300);
+			
+			// Show user data collection when closing
+			showUserDataCollection();
+		});
+
+    elements.sendButton.addEventListener("click", sendMessage);
+
+    elements.inputField.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+      
+      // Reset inactivity timer on typing
+      resetInactivityTimer();
+    });
+
+    elements.langToggle.addEventListener("click", toggleLanguage);
+    elements.sizeToggle.addEventListener("click", toggleSize);
+    elements.clearChat.addEventListener("click", clearChatHistory);
+    
+    // User data form events
+    elements.userDataForm.addEventListener('submit', handleUserDataSubmission);
+    elements.userDataSkip.addEventListener('click', () => {
+      elements.userDataModal.classList.add('hidden');
+    });
+    
+    // Add event listeners for all interaction to reset inactivity timer
+    elements.chatContainer.addEventListener('click', resetInactivityTimer);
+    elements.chatContainer.addEventListener('touchstart', resetInactivityTimer);
+    elements.inputField.addEventListener('focus', resetInactivityTimer);
+  }
+
+  // Start the application
+  initialize();
+})();
+</script>
