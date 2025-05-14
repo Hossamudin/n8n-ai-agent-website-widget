@@ -1,0 +1,535 @@
+<!-- n8n Chat Widget -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/marked/marked.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+    #n8n-chat-widget-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 350px;
+        height: 500px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        display: none;
+        flex-direction: column;
+        z-index: 10000;
+        overflow: hidden;
+        font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        transition: width 0.3s ease, height 0.3s ease;
+    }
+    
+    #n8n-chat-widget-container.expanded {
+        width: 700px;
+        height: 700px;
+    }
+    
+    .rtl-mode #n8n-chat-widget-container {
+        direction: rtl;
+        /* Keep on right side regardless of language */
+        right: 20px;
+        left: auto;
+    }
+    
+    #n8n-chat-widget-header {
+        background: #FFCC33; /* Yellowish color */
+        color: #333; /* Darker text for better contrast */
+        padding: 15px 20px;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 18px;
+    }
+    
+    #n8n-chat-widget-body {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        scroll-behavior: smooth;
+    }
+    
+    #n8n-chat-widget-body p {
+        margin-bottom: 15px;
+        padding: 12px 15px;
+        border-radius: 10px;
+        font-size: 14px;
+        max-width: 80%;
+        word-wrap: break-word;
+        line-height: 1.5;
+    }
+    
+    #n8n-chat-widget-body .user-message {
+        color: #333;
+        background: #F8F8F8;
+        margin-left: auto;
+        margin-right: 0;
+        border-bottom-right-radius: 4px;
+    }
+    
+    .rtl-mode #n8n-chat-widget-body .user-message {
+        margin-left: 0;
+        margin-right: auto;
+        border-bottom-right-radius: 10px;
+        border-bottom-left-radius: 4px;
+    }
+    
+    #n8n-chat-widget-body .bot-message {
+        color: #333;
+        background: #FFF2CC; /* Light yellow */
+        margin-right: auto;
+        margin-left: 0;
+        border-bottom-left-radius: 4px;
+    }
+    
+    .rtl-mode #n8n-chat-widget-body .bot-message {
+        margin-right: 0;
+        margin-left: auto;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 4px;
+    }
+    
+    /* Style for embedded images */
+    #n8n-chat-widget-body img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        margin: 5px 0;
+    }
+    
+    #n8n-chat-widget-footer {
+        padding: 12px 15px;
+        border-top: 1px solid #eee;
+        display: flex;
+        gap: 10px;
+    }
+    
+    #n8n-chat-widget-input {
+        flex: 1;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        outline: none;
+        font-size: 14px;
+        transition: border 0.3s;
+    }
+    
+    #n8n-chat-widget-input:focus {
+        border-color: #FFCC33;
+    }
+    
+    #n8n-chat-widget-send {
+        background: #FFCC33;
+        color: #333;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+    
+    #n8n-chat-widget-send:hover {
+        background: #E6B800;
+    }
+    
+    #n8n-chat-widget-button {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #FFCC33;
+        color: #333;
+        border: none;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 24px;
+        z-index: 10001;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    #n8n-chat-widget-button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.25);
+    }
+    
+    .header-buttons {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    #n8n-language-toggle, #n8n-size-toggle, #n8n-clear-chat {
+        background: transparent;
+        color: #333;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    
+    .typing-indicator {
+        display: flex;
+        padding: 10px;
+        width: fit-content;
+    }
+    
+    .typing-indicator span {
+        height: 8px;
+        width: 8px;
+        background: #FFCC33;
+        border-radius: 50%;
+        display: block;
+        margin: 0 2px;
+        opacity: 0.4;
+    }
+    
+    .typing-indicator span:nth-child(1) {
+        animation: pulse 1s infinite ease-in-out;
+    }
+    
+    .typing-indicator span:nth-child(2) {
+        animation: pulse 1s infinite ease-in-out .2s;
+    }
+    
+    .typing-indicator span:nth-child(3) {
+        animation: pulse 1s infinite ease-in-out .4s;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); opacity: 0.4; }
+        50% { transform: scale(1.3); opacity: 1; }
+        100% { transform: scale(1); opacity: 0.4; }
+    }
+</style>
+
+<!-- Chat Widget Button -->
+<button id="n8n-chat-widget-button" class="animate__animated animate__fadeIn">💬</button>
+
+<!-- Chat Widget -->
+<div id="n8n-chat-widget-container" class="animate__animated">
+    <div id="n8n-chat-widget-header">
+        <div class="header-buttons">
+            <button id="n8n-language-toggle">عربي</button>
+            <span id="n8n-chat-title">Chat</span>
+        </div>
+        <div class="header-buttons">
+            <button id="n8n-clear-chat">🗑️</button>
+            <button id="n8n-size-toggle">⊞</button>
+            <button id="n8n-chat-close">✖</button>
+        </div>
+    </div>
+    <div id="n8n-chat-widget-body">
+        <!-- Chat messages will be loaded here -->
+    </div>
+    <div id="n8n-chat-widget-footer">
+        <input type="text" id="n8n-chat-widget-input" placeholder="Type your message here...">
+        <button id="n8n-chat-widget-send">Send</button>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Configuration
+    const chatConfig = {
+        webhook: {
+            url: 'your-n8n-chat-url-here',
+            route: 'general'
+        },
+        language: {
+            current: 'en',
+            en: {
+                title: 'Chat',
+                placeholder: 'Type your message here...',
+                send: 'Send',
+                welcome: 'Hi 👋, how can we help?',
+                toggle: 'عربي',
+                expand: '⊞',
+                collapse: '⊟',
+                clear: '🗑️'
+            },
+            ar: {
+                title: 'محادثة',
+                placeholder: 'اكتب رسالتك هنا...',
+                send: 'إرسال',
+                welcome: 'مرحباً 👋، كيف يمكننا مساعدتك؟',
+                toggle: 'English',
+                expand: '⊞',
+                collapse: '⊟',
+                clear: '🗑️'
+            }
+        },
+        // Storage keys
+        storage: {
+            chatId: 'n8nChatId',
+            messages: 'n8nChatMessages',
+            language: 'n8nChatLanguage'
+        }
+    };
+
+    // Elements
+    const chatButton = document.getElementById('n8n-chat-widget-button');
+    const chatContainer = document.getElementById('n8n-chat-widget-container');
+    const closeButton = document.getElementById('n8n-chat-close');
+    const sendButton = document.getElementById('n8n-chat-widget-send');
+    const inputField = document.getElementById('n8n-chat-widget-input');
+    const chatBody = document.getElementById('n8n-chat-widget-body');
+    const langToggle = document.getElementById('n8n-language-toggle');
+    const sizeToggle = document.getElementById('n8n-size-toggle');
+    const clearChat = document.getElementById('n8n-clear-chat');
+    const chatTitle = document.getElementById('n8n-chat-title');
+
+    // Check for saved language preference
+    const savedLanguage = localStorage.getItem(chatConfig.storage.language);
+    if (savedLanguage) {
+        chatConfig.language.current = savedLanguage;
+        if (savedLanguage === 'ar') {
+            document.body.classList.add('rtl-mode');
+        }
+    }
+
+    // Function to generate or retrieve a unique chat ID
+    function getChatId() {
+        let chatId = localStorage.getItem(chatConfig.storage.chatId);
+        if (!chatId) {
+            chatId = "chat_" + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem(chatConfig.storage.chatId, chatId);
+        }
+        return chatId;
+    }
+
+    // Save message to localStorage
+    function saveMessage(message, isUser) {
+        const messages = getMessages();
+        messages.push({
+            text: message,
+            isUser: isUser,
+            timestamp: new Date().toISOString()
+        });
+        localStorage.setItem(chatConfig.storage.messages, JSON.stringify(messages));
+    }
+
+    // Get messages from localStorage
+    function getMessages() {
+        const savedMessages = localStorage.getItem(chatConfig.storage.messages);
+        return savedMessages ? JSON.parse(savedMessages) : [];
+    }
+
+    // Clear chat history
+    function clearChatHistory() {
+        localStorage.removeItem(chatConfig.storage.messages);
+        chatBody.innerHTML = '';
+        addWelcomeMessage();
+    }
+
+    // Add welcome message
+    function addWelcomeMessage() {
+        const welcomeMsg = document.createElement("p");
+        welcomeMsg.innerHTML = '<strong>' + chatConfig.language[chatConfig.language.current].welcome + '</strong>';
+        welcomeMsg.className = "bot-message animate__animated animate__fadeIn";
+        chatBody.appendChild(welcomeMsg);
+    }
+
+    // Load chat history
+    function loadChatHistory() {
+        chatBody.innerHTML = '';
+        const messages = getMessages();
+        
+        if (messages.length === 0) {
+            addWelcomeMessage();
+            return;
+        }
+        
+        messages.forEach(msg => {
+            const msgElem = document.createElement("p");
+            if (msg.isUser) {
+                msgElem.textContent = msg.text;
+                msgElem.className = "user-message";
+            } else {
+                msgElem.innerHTML = processMessage(msg.text);
+                msgElem.className = "bot-message";
+            }
+            chatBody.appendChild(msgElem);
+        });
+        
+        // Scroll to bottom
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    // Show typing indicator
+    function showTypingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'bot-message typing-indicator';
+        typingDiv.id = 'typing-indicator';
+        typingDiv.innerHTML = '<span></span><span></span><span></span>';
+        chatBody.appendChild(typingDiv);
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    // Remove typing indicator
+    function removeTypingIndicator() {
+        const indicator = document.getElementById('typing-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+
+    // Toggle language
+    function toggleLanguage() {
+        const body = document.body;
+        if (chatConfig.language.current === 'en') {
+            chatConfig.language.current = 'ar';
+            body.classList.add('rtl-mode');
+        } else {
+            chatConfig.language.current = 'en';
+            body.classList.remove('rtl-mode');
+        }
+        // Save language preference
+        localStorage.setItem(chatConfig.storage.language, chatConfig.language.current);
+        updateLanguageTexts();
+    }
+
+    // Toggle chat size
+    function toggleSize() {
+        if (chatContainer.classList.contains('expanded')) {
+            chatContainer.classList.remove('expanded');
+            sizeToggle.textContent = chatConfig.language[chatConfig.language.current].expand;
+        } else {
+            chatContainer.classList.add('expanded');
+            sizeToggle.textContent = chatConfig.language[chatConfig.language.current].collapse;
+        }
+    }
+
+    // Update all text elements based on current language
+    function updateLanguageTexts() {
+        const lang = chatConfig.language[chatConfig.language.current];
+        chatTitle.textContent = lang.title;
+        inputField.placeholder = lang.placeholder;
+        sendButton.textContent = lang.send;
+        langToggle.textContent = lang.toggle;
+        sizeToggle.textContent = chatContainer.classList.contains('expanded') ? lang.collapse : lang.expand;
+        clearChat.textContent = lang.clear;
+    }
+
+    // Process text to handle markdown and images
+    function processMessage(text) {
+        // First convert markdown to HTML using marked library if available
+        let processedText = window.marked ? marked.parse(text) : text;
+        
+        // Then detect any image URLs and convert them to img tags if not already done
+        if (!window.marked) {
+            // Simple regex to find image URLs
+            const imageUrlRegex = /(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp))/gi;
+            processedText = processedText.replace(imageUrlRegex, '<img src="$1" alt="Image" />');
+        }
+        
+        return processedText;
+    }
+
+    // Send message
+    function sendMessage() {
+        const message = inputField.value.trim();
+        if (message === "") return;
+
+        // Add user message to chat
+        const userMsgElem = document.createElement("p");
+        userMsgElem.textContent = message;
+        userMsgElem.className = "user-message animate__animated animate__fadeIn";
+        chatBody.appendChild(userMsgElem);
+        chatBody.scrollTop = chatBody.scrollHeight;
+        
+        // Save user message to localStorage
+        saveMessage(message, true);
+
+        // Clear input
+        inputField.value = "";
+        
+        // Show typing indicator
+        showTypingIndicator();
+
+        // Send to n8n webhook
+        fetch(chatConfig.webhook.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chatId: getChatId(),
+                message: message,
+                route: chatConfig.webhook.route,
+                language: chatConfig.language.current
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Remove typing indicator
+            removeTypingIndicator();
+            
+            // Add bot response with processed formatting
+            const botMessage = document.createElement("p");
+            const botResponse = data.output || "Sorry, I couldn't understand that.";
+            botMessage.innerHTML = processMessage(botResponse);
+            botMessage.className = "bot-message animate__animated animate__fadeIn";
+            chatBody.appendChild(botMessage);
+            chatBody.scrollTop = chatBody.scrollHeight;
+            
+            // Save bot message to localStorage
+            saveMessage(botResponse, false);
+        })
+        .catch(error => {
+            console.error("Error:", error);
+            removeTypingIndicator();
+            
+            // Show error message
+            const errorMsg = document.createElement("p");
+            const errorText = "Sorry, there was an error. Please try again.";
+            errorMsg.textContent = errorText;
+            errorMsg.className = "bot-message animate__animated animate__fadeIn";
+            chatBody.appendChild(errorMsg);
+            chatBody.scrollTop = chatBody.scrollHeight;
+            
+            // Save error message to localStorage
+            saveMessage(errorText, false);
+        });
+    }
+
+    // Event Listeners
+    chatButton.addEventListener("click", function() {
+        chatContainer.style.display = "flex";
+        chatContainer.classList.add('animate__fadeIn');
+        chatButton.style.display = "none";
+        
+        // Load chat history when opening
+        loadChatHistory();
+    });
+
+    closeButton.addEventListener("click", function() {
+        chatContainer.classList.add('animate__fadeOut');
+        setTimeout(() => {
+            chatContainer.style.display = "none";
+            chatContainer.classList.remove('animate__fadeOut', 'animate__fadeIn');
+            chatButton.style.display = "flex";
+        }, 500);
+    });
+
+    sendButton.addEventListener("click", sendMessage);
+
+    inputField.addEventListener("keypress", function(e) {
+        if (e.key === "Enter") {
+            sendMessage();
+        }
+    });
+
+    langToggle.addEventListener("click", toggleLanguage);
+    sizeToggle.addEventListener("click", toggleSize);
+    clearChat.addEventListener("click", clearChatHistory);
+
+    // Initialize
+    getChatId(); // Ensure chat ID is created
+    updateLanguageTexts();
+})();
+</script>
