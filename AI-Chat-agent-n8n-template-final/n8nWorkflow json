@@ -1,0 +1,236 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "mode": "webhook",
+        "options": {
+          "loadPreviousSession": "notSupported",
+          "responseMode": "lastNode"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "cc5bf74b-7749-458c-a288-64d7576806b3",
+      "name": "When chat message received",
+      "webhookId": "f2abcc74-3c15-478e-bd27-03e506c3b419"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }} {{ $json.message }}",
+        "options": {
+          "systemMessage": "<personality>\nYou're an ai assistant to help our clients on our store.\n</personality> \n<goal> \nhelp clients find products they're searching on our website\n</goal>\n<tools>\n1) Woocommerce GET product: use this tool to search a product (search_term) and filter with (min_price) and (max_price). if not specificied by the user, use min price = 0 and max price as 1000000. \n2) Woocommerce GET Order: ask the client for an order id to update him on his order status.\n</tools>"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "6d3f0417-a107-4c7d-945b-1cea6b56ee1e",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        140,
+        220
+      ],
+      "id": "e2359c43-156a-4a0d-8848-d5226de71d13",
+      "name": "DeepSeek Chat Model",
+      "credentials": {
+        "deepSeekApi": {
+          "id": "H7N86HDEavf4kuWZ",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.chatId }} {{ $json.sessionId }} 2"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        280,
+        280
+      ],
+      "id": "0b38cf53-9a40-4182-9b07-6e756f6911e9",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 5,
+        "options": {
+          "maxPrice": "={{ $fromAI('Max_Price', ``, 'string') }}",
+          "minPrice": "={{ $fromAI('Min_Price', ``, 'string') }}",
+          "search": "={{ $fromAI('Product_search_term', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.wooCommerceTool",
+      "typeVersion": 1,
+      "position": [
+        440,
+        220
+      ],
+      "id": "c07a6b68-bb62-4e19-9829-567f83681b61",
+      "name": "WooCommerce",
+      "credentials": {
+        "wooCommerceApi": {
+          "id": "uJjr4EkCNPijaokF",
+          "name": "WooCommerce account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "order",
+        "operation": "get",
+        "orderId": "={{ $fromAI('Order_ID', ``, 'string') }}"
+      },
+      "type": "n8n-nodes-base.wooCommerceTool",
+      "typeVersion": 1,
+      "position": [
+        580,
+        240
+      ],
+      "id": "d9c0ab0e-c9ee-408c-9c83-481a30d04896",
+      "name": "WooCommerce1",
+      "credentials": {
+        "wooCommerceApi": {
+          "id": "uJjr4EkCNPijaokF",
+          "name": "WooCommerce account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Ai Agent for Woocommerce by Hossamudin Hassan\n![AI agent chatbot woocommerce](https://hossamudin.com/wp-content/uploads/2025/06/Xnapper-1446-12-05-09.07.26.png)\n",
+        "height": 960,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -40
+      ],
+      "id": "948c9c33-c2ad-4b7b-b4d9-28c3a2ace25e",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Code template: https://github.com/Hossamudin/n8n-ai-agent-website-widget/tree/main/AI-Chat-agent-n8n-template-final\n\n## Instructions:\n1) Choose the ai model of your choice\n2) get your REST API key from wooocommerce and auth WooCommerce in n8n.\n3) Test your ai agent\n4) Activate your workflow\n5) Use WPCode to insert the HTMl, JS, and css into your website (footer) or page (whatever you prefer)\n6) enjoy using it directly from your home page (or custom page).\n(!image)",
+        "height": 400,
+        "width": 480,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        720,
+        -20
+      ],
+      "id": "f9aa5ff3-41e2-4822-bd58-5d1f513d88e4",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## سلسلة شرح n8n\n\n[![n8n](https://hossamudin.com/wp-content/uploads/2025/06/n8n-hossamudin-scaled.png)](https://youtu.be/xqpqGb047SU)\n\nعرض Cloudways: https://epreneurs.link/cloudwaysEpreneur",
+        "height": 480,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        720,
+        400
+      ],
+      "id": "2424db25-8426-47a5-a53e-7e52f1df15e3",
+      "name": "Sticky Note2"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WooCommerce": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WooCommerce1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "When chat message received": [
+      {
+        "chatId": "chat_yszj93481_1747246431789",
+        "message": "hello",
+        "route": "general",
+        "language": "en"
+      }
+    ]
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1c6fe1f86c2c8dcb4e3a7cd79c80882fb06f5ccb9ad56fc10285b4ecd3888265"
+  }
+}
