@@ -1,0 +1,567 @@
+(function() {
+    // Add required libraries dynamically (safely)
+    function loadScripts() {
+      return new Promise((resolve, reject) => {
+        const libraries = [
+          { name: 'marked', url: 'https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js' },
+          { name: 'dompurify', url: 'https://cdn.jsdelivr.net/npm/dompurify@2.4.7/dist/purify.min.js' },
+          { name: 'localforage', url: 'https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js' }
+        ];
+        
+        let loaded = 0;
+        
+        libraries.forEach(lib => {
+          // Skip if already loaded
+          if (window[lib.name]) {
+            loaded++;
+            if (loaded === libraries.length) resolve();
+            return;
+          }
+          
+          const script = document.createElement('script');
+          script.src = lib.url;
+          script.async = true;
+          
+          script.onload = () => {
+            loaded++;
+            if (loaded === libraries.length) resolve();
+          };
+          
+          script.onerror = () => {
+            console.error(`Failed to load ${lib.name}`);
+            reject(`Failed to load ${lib.name}`);
+          };
+          
+          document.body.appendChild(script);
+        });
+      });
+    }
+    
+    // Initialize after libraries are loaded
+    loadScripts().then(() => {
+      initChatWidget();
+    }).catch(error => {
+      console.error('Failed to initialize chat widget:', error);
+    });
+    
+    function initChatWidget() {
+      // Configuration
+      const config = {
+        webhook: {
+          // The actual URL is stored as a data attribute on the container
+          route: 'general'
+        },
+        language: {
+          current: 'en',
+          en: {
+            title: 'Chat',
+            placeholder: 'Type your message here...',
+            send: 'Send',
+            welcome: 'Hi 👋, how can we help?',
+            toggle: 'عربي',
+            expand: '⊞',
+            collapse: '⊟',
+            clear: '🗑️',
+            pleaseWait: 'Please wait',
+            cooldownMessage: 'You can send another message in {seconds} seconds.',
+            errorMessage: 'Sorry, there was an error. Please try again.',
+            offlineMessage: 'You appear to be offline. Please check your connection and try again.'
+          },
+          ar: {
+            title: 'محادثة',
+            placeholder: 'اكتب رسالتك هنا...',
+            send: 'إرسال',
+            welcome: 'مرحباً 👋، كيف يمكننا مساعدتك؟',
+            toggle: 'English',
+            expand: '⊞',
+            collapse: '⊟',
+            clear: '🗑️',
+            pleaseWait: 'الرجاء الانتظار',
+            cooldownMessage: 'يمكنك إرسال رسالة أخرى في {seconds} ثوانٍ.',
+            errorMessage: 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.',
+            offlineMessage: 'يبدو أنك غير متصل بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.'
+          }
+        },
+        // Rate limiting configuration
+        rateLimit: {
+          messageInterval: 3, // seconds between messages
+        }
+      };
+    
+      // Elements
+      const elements = {
+        chatButton: document.getElementById('n8n-chat-button'),
+        chatContainer: document.getElementById('n8n-chat-container'),
+        closeButton: document.getElementById('n8n-close-chat'),
+        sendButton: document.getElementById('n8n-send-button'),
+        inputField: document.getElementById('n8n-chat-input'),
+        chatBody: document.getElementById('n8n-chat-body'),
+        langToggle: document.getElementById('n8n-language-toggle'),
+        themeToggle: document.getElementById('n8n-theme-toggle'),
+        sizeToggle: document.getElementById('n8n-size-toggle'),
+        clearChat: document.getElementById('n8n-clear-chat'),
+        chatTitle: document.getElementById('n8n-chat-title'),
+        emojiButton: document.getElementById('n8n-emoji-button'),
+        emojiPanel: document.getElementById('n8n-emoji-panel')
+      };
+    
+      // Storage setup
+      const store = {
+        messages: localforage.createInstance({ name: 'n8nChat', storeName: 'messages' }),
+        settings: localforage.createInstance({ name: 'n8nChat', storeName: 'settings' })
+      };
+    
+      // Chat state variables
+      let isInCooldown = false;
+      let lastMessageTime = null;
+      
+      // Initialize
+      async function initialize() {
+        await initializeTheme();
+        await initializeLanguage();
+        await getChatId(); // Ensure chat ID is created
+        
+        // Event Listeners
+        elements.chatButton.addEventListener('click', openChat);
+        elements.closeButton.addEventListener('click', closeChat);
+        elements.sendButton.addEventListener('click', sendMessage);
+        elements.inputField.addEventListener('keypress', handleInputKeypress);
+        elements.langToggle.addEventListener('click', toggleLanguage);
+        elements.themeToggle.addEventListener('click', toggleTheme);
+        elements.sizeToggle.addEventListener('click', toggleSize);
+        elements.clearChat.addEventListener('click', clearChatHistory);
+        elements.emojiButton.addEventListener('click', toggleEmojiPanel);
+        
+        // Add click handlers for each emoji button
+        document.querySelectorAll('.n8n-emoji-btn').forEach(btn => {
+          btn.addEventListener('click', function() {
+            insertEmoji(this.textContent);
+          });
+        });
+        
+        // Hide emoji panel when clicking elsewhere
+        document.addEventListener('click', function(e) {
+          if (!elements.emojiButton.contains(e.target) && !elements.emojiPanel.contains(e.target)) {
+            elements.emojiPanel.classList.add('hidden');
+          }
+        });
+        
+        // Auto-grow textarea
+        elements.inputField.addEventListener('input', autoResizeInput);
+        
+        // Check for offline status
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        
+        // Load chat history when opening (if button clicked)
+        if (elements.chatButton.dataset.autoOpen === 'true') {
+          openChat();
+        }
+      }
+      
+      // Theme handling
+      async function initializeTheme() {
+        // Check for system preference
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          // If system prefers dark, check if user has set a preference
+          const savedTheme = await store.settings.getItem('theme');
+          if (!savedTheme) {
+            document.documentElement.classList.add('dark');
+            await store.settings.setItem('theme', 'dark');
+          } else {
+            applyTheme(savedTheme);
+          }
+        } else {
+          const savedTheme = await store.settings.getItem('theme') || 'light';
+          applyTheme(savedTheme);
+        }
+        
+        // Listen for system theme changes
+        if (window.matchMedia) {
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async e => {
+            const hasUserPreference = await store.settings.getItem('theme');
+            if (!hasUserPreference) {
+              applyTheme(e.matches ? 'dark' : 'light');
+            }
+          });
+        }
+      }
+      
+      async function toggleTheme() {
+        const currentTheme = await store.settings.getItem('theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        applyTheme(newTheme);
+        await store.settings.setItem('theme', newTheme);
+      }
+      
+      function applyTheme(theme) {
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+    
+      // Initialize language
+      async function initializeLanguage() {
+        const savedLanguage = await store.settings.getItem('language') || 'en';
+        config.language.current = savedLanguage;
+        
+        if (savedLanguage === 'ar') {
+          document.body.classList.add('rtl-mode');
+          elements.chatContainer.dir = 'rtl';
+        } else {
+          document.body.classList.remove('rtl-mode');
+          elements.chatContainer.dir = 'ltr';
+        }
+        
+        updateLanguageTexts();
+      }
+      
+      async function toggleLanguage() {
+        const newLang = config.language.current === 'en' ? 'ar' : 'en';
+        config.language.current = newLang;
+        
+        if (newLang === 'ar') {
+          document.body.classList.add('rtl-mode');
+          elements.chatContainer.dir = 'rtl';
+        } else {
+          document.body.classList.remove('rtl-mode');
+          elements.chatContainer.dir = 'ltr';
+        }
+        
+        await store.settings.setItem('language', newLang);
+        updateLanguageTexts();
+      }
+      
+      // Update all text elements based on current language
+      function updateLanguageTexts() {
+        const lang = config.language[config.language.current];
+        elements.chatTitle.textContent = lang.title;
+        elements.inputField.placeholder = lang.placeholder;
+        elements.sendButton.textContent = lang.send;
+        elements.langToggle.textContent = config.language.current === 'en' ? 'عربي' : 'EN';
+        
+        const isExpanded = elements.chatContainer.classList.contains('expanded');
+        elements.sizeToggle.textContent = isExpanded ? lang.collapse : lang.expand;
+      }
+    
+      // Function to securely generate or retrieve a unique chat ID
+      async function getChatId() {
+        let chatId = await store.settings.getItem('chatId');
+        if (!chatId) {
+          chatId = "chat_" + Math.random().toString(36).substr(2, 9) + "_" + Date.now();
+          await store.settings.setItem('chatId', chatId);
+        }
+        return chatId;
+      }
+    
+      // Open chat widget
+      function openChat() {
+        elements.chatContainer.classList.remove('hidden');
+        elements.chatContainer.classList.add('n8n-fade-in');
+        elements.chatButton.classList.add('hidden');
+        
+        // Load chat history when opening
+        loadChatHistory();
+      }
+      
+      // Close chat widget
+      function closeChat() {
+        elements.chatContainer.classList.remove('n8n-fade-in');
+        elements.chatContainer.classList.add('n8n-fade-out');
+        setTimeout(() => {
+          elements.chatContainer.classList.add('hidden');
+          elements.chatContainer.classList.remove('n8n-fade-out');
+          elements.chatButton.classList.remove('hidden');
+        }, 300);
+      }
+      
+      // Toggle chat size
+      function toggleSize() {
+        elements.chatContainer.classList.toggle('expanded');
+        
+        const isExpanded = elements.chatContainer.classList.contains('expanded');
+        elements.sizeToggle.textContent = isExpanded 
+          ? config.language[config.language.current].collapse 
+          : config.language[config.language.current].expand;
+          
+        // Scroll to bottom when resizing
+        elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+      }
+    
+      // Save message to LocalForage
+      async function saveMessage(message, isUser) {
+        let messages = await getMessages();
+        messages.push({
+          text: message,
+          isUser: isUser,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Limit stored messages to prevent storage bloat
+        const maxMessages = 50;
+        if (messages.length > maxMessages) {
+          messages = messages.slice(-maxMessages);
+        }
+        
+        await store.messages.setItem('messages', messages);
+        
+        // Track message for rate limiting
+        if (isUser) {
+          lastMessageTime = Date.now();
+        }
+      }
+    
+      // Get messages from LocalForage
+      async function getMessages() {
+        const messages = await store.messages.getItem('messages');
+        return messages || [];
+      }
+    
+      // Clear chat history
+      async function clearChatHistory() {
+        await store.messages.removeItem('messages');
+        elements.chatBody.innerHTML = '';
+        addWelcomeMessage();
+      }
+    
+      // Add welcome message
+      function addWelcomeMessage() {
+        const welcomeMsg = document.createElement("p");
+        welcomeMsg.innerHTML = DOMPurify.sanitize('<strong>' + config.language[config.language.current].welcome + '</strong>');
+        welcomeMsg.className = "n8n-message n8n-bot-message n8n-fade-in";
+        elements.chatBody.appendChild(welcomeMsg);
+      }
+    
+      // Load chat history
+      async function loadChatHistory() {
+        elements.chatBody.innerHTML = '';
+        const messages = await getMessages();
+        
+        if (messages.length === 0) {
+          addWelcomeMessage();
+          return;
+        }
+        
+        messages.forEach(msg => {
+          const msgElem = document.createElement("p");
+          if (msg.isUser) {
+            msgElem.textContent = msg.text;
+            msgElem.className = "n8n-message n8n-user-message";
+          } else {
+            msgElem.innerHTML = DOMPurify.sanitize(processMessage(msg.text));
+            msgElem.className = "n8n-message n8n-bot-message";
+          }
+          elements.chatBody.appendChild(msgElem);
+        });
+        
+        // Scroll to bottom
+        elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+      }
+    
+      // Show typing indicator
+      function showTypingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'n8n-typing-indicator';
+        typingDiv.id = 'n8n-typing-indicator';
+        typingDiv.innerHTML = '<span></span><span></span><span></span>';
+        elements.chatBody.appendChild(typingDiv);
+        elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+      }
+    
+      // Remove typing indicator
+      function removeTypingIndicator() {
+        const indicator = document.getElementById('n8n-typing-indicator');
+        if (indicator) {
+          indicator.remove();
+        }
+      }
+      
+      // Process text to handle markdown and images
+      function processMessage(text) {
+        // Use marked library to process markdown
+        if (window.marked) {
+          try {
+            marked.setOptions({
+              breaks: true,
+              gfm: true,
+              headerIds: false,
+              mangle: false
+            });
+            return marked.parse(text);
+          } catch (e) {
+            console.error("Error parsing markdown:", e);
+            // Fallback if parsing fails
+            return basicTextFormatting(text);
+          }
+        } else {
+          return basicTextFormatting(text);
+        }
+      }
+      
+      // Basic text formatting fallback
+      function basicTextFormatting(text) {
+        // Convert line breaks
+        text = text.replace(/\n/g, '<br>');
+        
+        // Detect and convert image URLs
+        const imageUrlRegex = /(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp))/gi;
+        text = text.replace(imageUrlRegex, '<img src="$1" alt="Image" class="max-w-full rounded-lg my-1" />');
+        
+        // Simple bold text support
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        
+        // Simple italics text support
+        text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        
+        return text;
+      }
+      
+      // Auto-resize textarea based on content
+      function autoResizeInput() {
+        elements.inputField.style.height = 'auto';
+        elements.inputField.style.height = (elements.inputField.scrollHeight) + 'px';
+      }
+      
+      // Toggle emoji panel
+      function toggleEmojiPanel() {
+        elements.emojiPanel.classList.toggle('hidden');
+      }
+      
+      // Insert emoji into input
+      function insertEmoji(emoji) {
+        elements.inputField.value += emoji;
+        elements.inputField.focus();
+        elements.emojiPanel.classList.add('hidden');
+        autoResizeInput();
+      }
+      
+      // Update online status
+      function updateOnlineStatus() {
+        if (!navigator.onLine) {
+          showOfflineMessage();
+        }
+      }
+      
+      // Show offline message
+      function showOfflineMessage() {
+        const offlineMsg = document.createElement("p");
+        offlineMsg.textContent = config.language[config.language.current].offlineMessage;
+        offlineMsg.className = "n8n-message n8n-bot-message n8n-fade-in";
+        elements.chatBody.appendChild(offlineMsg);
+        elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+      }
+    
+      // Handle input keypress (Enter to send)
+      function handleInputKeypress(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      }
+    
+      // Send message
+      async function sendMessage() {
+        const message = elements.inputField.value.trim();
+        if (message === "") return;
+        
+        // Check rate limits
+        if (isInCooldown) {
+          return; // Still in cooldown
+        }
+        
+        // Check for online status
+        if (!navigator.onLine) {
+          showOfflineMessage();
+          return;
+        }
+        
+        // Check message cooldown
+        if (lastMessageTime && (Date.now() - lastMessageTime) < (config.rateLimit.messageInterval * 1000)) {
+          const remainingSeconds = Math.ceil(config.rateLimit.messageInterval - ((Date.now() - lastMessageTime) / 1000));
+          isInCooldown = true;
+          showCooldownMessage(remainingSeconds);
+          return;
+        }
+    
+        // Add user message to chat
+        const userMsgElem = document.createElement("p");
+        userMsgElem.textContent = message;
+        userMsgElem.className = "n8n-message n8n-user-message n8n-fade-in";
+        elements.chatBody.appendChild(userMsgElem);
+        elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+        
+        // Save user message
+        await saveMessage(message, true);
+    
+        // Clear input and reset height
+        elements.inputField.value = "";
+        elements.inputField.style.height = 'auto';
+        
+        // Show typing indicator
+        showTypingIndicator();
+    
+        // Send to n8n webhook
+        try {
+          const webhookUrl = elements.chatContainer.getAttribute('data-webhook-url');
+          const response = await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chatId: await getChatId(),
+              message: message,
+              route: config.webhook.route,
+              language: config.language.current
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          // Remove typing indicator
+          removeTypingIndicator();
+          
+          // Add bot response with processed formatting
+          const botMessage = document.createElement("p");
+          const botResponse = data.output || "Sorry, I couldn't understand that.";
+          botMessage.innerHTML = DOMPurify.sanitize(processMessage(botResponse));
+          botMessage.className = "n8n-message n8n-bot-message n8n-fade-in";
+          elements.chatBody.appendChild(botMessage);
+          elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+          
+          // Save bot message
+          await saveMessage(botResponse, false);
+        } catch (error) {
+          console.error("Error:", error);
+          removeTypingIndicator();
+          
+          // Show error message
+          const errorMsg = document.createElement("p");
+          errorMsg.textContent = config.language[config.language.current].errorMessage;
+          errorMsg.className = "n8n-message n8n-bot-message n8n-fade-in";
+          elements.chatBody.appendChild(errorMsg);
+          elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+        }
+      }
+      
+      // Show cooldown message
+      function showCooldownMessage(seconds) {
+        const cooldownMsg = document.createElement("p");
+        cooldownMsg.textContent = config.language[config.language.current].cooldownMessage.replace('{seconds}', seconds);
+        cooldownMsg.className = "n8n-message n8n-bot-message n8n-fade-in";
+        elements.chatBody.appendChild(cooldownMsg);
+        elements.chatBody.scrollTop = elements.chatBody.scrollHeight;
+        
+        setTimeout(() => {
+          isInCooldown = false;
+        }, seconds * 1000);
+      }
+    
+      // Start the application
+      initialize();
+    }
+  })();
