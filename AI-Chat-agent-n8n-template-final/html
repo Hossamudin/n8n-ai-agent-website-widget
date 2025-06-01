@@ -1,0 +1,66 @@
+<!-- Chat Widget Button -->
+<button id="n8n-chat-button" class="n8n-fade-in" aria-label="Open chat">
+    💬
+  </button>
+  
+  <!-- Chat Widget Container -->
+  <div id="n8n-chat-container" class="n8n-chat-widget n8n-fade-in hidden" data-webhook-url="Insert_your_n8n_webhook_url_Here">
+    <!-- Header -->
+    <div id="n8n-chat-header">
+      <div class="n8n-header-left">
+        <button id="n8n-language-toggle" class="n8n-header-button" aria-label="Toggle language">
+          EN
+        </button>
+        <span id="n8n-chat-title">Chat</span>
+      </div>
+      <div class="n8n-header-actions">
+        <button id="n8n-theme-toggle" class="n8n-header-button" aria-label="Toggle theme">
+          🌓
+        </button>
+        <button id="n8n-clear-chat" class="n8n-header-button" aria-label="Clear chat">
+          🗑️
+        </button>
+        <button id="n8n-size-toggle" class="n8n-header-button" aria-label="Toggle size">
+          ⊞
+        </button>
+        <button id="n8n-close-chat" class="n8n-header-button" aria-label="Close chat">
+          ✖
+        </button>
+      </div>
+    </div>
+    
+    <!-- Body -->
+    <div id="n8n-chat-body">
+      <!-- Messages will be added here dynamically -->
+    </div>
+    
+    <!-- Footer -->
+    <div id="n8n-chat-footer">
+      <div id="n8n-chat-input-wrapper">
+        <textarea 
+          id="n8n-chat-input" 
+          placeholder="Type your message here..." 
+          rows="1" 
+          aria-label="Chat message"
+        ></textarea>
+        <button id="n8n-emoji-button" aria-label="Insert emoji">
+          😊
+        </button>
+      </div>
+      <button id="n8n-send-button">Send</button>
+    </div>
+    
+    <!-- Emoji Panel (initially hidden) -->
+    <div id="n8n-emoji-panel" class="hidden">
+      <button class="n8n-emoji-btn" aria-label="Happy face emoji">😊</button>
+      <button class="n8n-emoji-btn" aria-label="Thumbs up emoji">👍</button>
+      <button class="n8n-emoji-btn" aria-label="Praying hands emoji">🙏</button>
+      <button class="n8n-emoji-btn" aria-label="Heart emoji">❤️</button>
+      <button class="n8n-emoji-btn" aria-label="Waving hand emoji">👋</button>
+      <button class="n8n-emoji-btn" aria-label="Fire emoji">🔥</button>
+      <button class="n8n-emoji-btn" aria-label="Check mark emoji">✅</button>
+      <button class="n8n-emoji-btn" aria-label="Star emoji">⭐</button>
+      <button class="n8n-emoji-btn" aria-label="Party popper emoji">🎉</button>
+      <button class="n8n-emoji-btn" aria-label="Thinking face emoji">🤔</button>
+    </div>
+  </div>
